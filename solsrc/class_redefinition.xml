@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<program language="SOL26">
+  <class name="Foo" parent="Object"/>
+  <class name="Foo" parent="Object"/>
+  <class name="Main" parent="Object">
+    <method selector="run">
+      <block arity="0"/>
+    </method>
+  </class>
+</program>

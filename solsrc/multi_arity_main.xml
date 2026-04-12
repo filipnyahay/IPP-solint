@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<program language="SOL26">
+  <class name="Main" parent="Object">
+    <method selector="run">
+      <block arity="0"/>
+    </method>
+    <method selector="foo:">
+      <block arity="1">
+        <parameter order="1" name="x"/>
+      </block>
+    </method>
+    <method selector="bar:baz:">
+      <block arity="2">
+        <parameter order="1" name="y"/>
+        <parameter order="2" name="z"/>
+      </block>
+    </method>
+  </class>
+</program>
