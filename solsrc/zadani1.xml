@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<program language="SOL26">
+  <class name="Main" parent="Object">
+    <method selector="run">
+      <block arity="0">
+        <assign order="1">
+          <var name="a"/>
+          <expr>
+            <send selector="attrib:">
+              <expr>
+                <var name="self"/>
+              </expr>
+              <arg order="1">
+                <expr>
+                  <literal class="Integer" value="10"/>
+                </expr>
+              </arg>
+            </send>
+          </expr>
+        </assign>
+        <assign order="2">
+          <var name="b"/>
+          <expr>
+            <block arity="0">
+              <assign order="1">
+                <var name="x"/>
+                <expr>
+                  <send selector="concatenateWith:">
+                    <expr>
+                      <send selector="asString">
+                        <expr>
+                          <send selector="attrib">
+                            <expr>
+                              <var name="self"/>
+                            </expr>
+                          </send>
+                        </expr>
+                      </send>
+                    </expr>
+                    <arg order="1">
+                      <expr>
+                        <send selector="asString">
+                          <expr>
+                            <literal class="Integer" value="10"/>
+                          </expr>
+                        </send>
+                      </expr>
+                    </arg>
+                  </send>
+                </expr>
+              </assign>
+            </block>
+          </expr>
+        </assign>
+      </block>
+    </method>
+  </class>
+</program>

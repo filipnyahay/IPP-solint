@@ -16,6 +16,16 @@ dev = [
     "ruff~=0.14.4",
 ]
 
+[tool.isort]
+profile = "black"
+line_length = 99
+known_first_party = ["interpreter"]
+known_third_party = ["lxml", "pydantic"]
+combine_as_imports = true
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+
 [tool.mypy]
 python_version = "3.14"
 strict = true

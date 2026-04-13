@@ -16,22 +16,12 @@ from lxml.etree import ParseError
 from pydantic import ValidationError
 
 import interpreter.symbols as solsym
-from interpreter.sol_runtime import SOLRuntime
-from interpreter.sol_runtime import SOLClass
-from interpreter.sol_runtime import SOLInstance
-from interpreter.sol_runtime import SOLMethod
-from interpreter.sol_runtime import Environment
 from interpreter.error_codes import ErrorCode
 from interpreter.exceptions import InterpreterError
-from interpreter.input_model import Program
-from interpreter.input_model import Block
-from interpreter.input_model import Assign
-from interpreter.input_model import Expr
-from interpreter.input_model import Literal
-from interpreter.input_model import Method
+from interpreter.input_model import Assign, Block, Expr, Literal, Program
+from interpreter.sol_runtime import Environment, SOLInstance, SOLMethod, SOLRuntime
 
 logger = logging.getLogger(__name__)
-
 
 class Interpreter:
     """
@@ -104,7 +94,7 @@ class Interpreter:
                             error_code=ErrorCode.SEM_COLLISION,
                             message="Static error: Assignment to block's formal parameter"
                         )
-
+    # wrappers for runtime instance creation
     def sol_nil(self):
         return self.runtime.new_nil()
 
@@ -138,8 +128,8 @@ class Interpreter:
         if ast_node.class_id == "False":
             return self.sol_false()
         if ast_node.class_id == "class":
-            print("looking up and stuff")
-            return None
+            return self.runtime.get_class(ast_node.value)
+
         raise Exception("Unreachable")
 
     def execute_expr(self, ast_node: Expr, env):
@@ -158,18 +148,27 @@ class Interpreter:
 
     def execute_assign(self, ast_node: Assign, env):
         # TODO: some checks
-        env.vars[ast_node.target.name] = self.execute_expr(ast_node.expr, env)
+        expr_res = self.execute_expr(ast_node.expr, env)
+        env.vars[ast_node.target.name] = expr_res
+        return expr_res
 
     def execute_block(self, ast_node: Block, env):
+        result = self.sol_nil()
         for assign in ast_node.assigns:
-            self.execute_assign(assign, env)
+            result = self.execute_assign(assign, env)
+
+        return result
 
     def execute_user_method(self, method: SOLMethod, receiver: SOLInstance, args):
         env = Environment()
         env.vars["self"] = receiver
 
-        for arg_name, arg in zip(method.ast_node.args):
-            env.vars[arg_name] = arg
+        if method.ast_node.block.arity != len(args):
+            raise Exception("param arity vro")
+
+        for i in range(len(args)):
+            arg_name = method.ast_node.block.parameters[i].name
+            env.vars[arg_name] = args[i]
 
         return self.execute_block(method.ast_node.block, env)
 
@@ -181,13 +180,8 @@ class Interpreter:
         logger.info("Executing program")
 
         for ast_class in self.current_program.classes:
-            for ast_method in ast_class.methods:
-                b = ast_method.block
-                for ast_assign in ast_method.block.assigns:
-                    ass = ast_assign
+            self.runtime.register_class(ast_class)
 
-        en = Environment()
-        self.execute_block(b, en)
-        solo = en.vars["_"]
-        print(f"this is value in _ : {solo._builtin_val}")
-
+        main_class = self.runtime.get_class("Main")
+        main_instance = self.sol_send(main_class, "new", [])
+        self.sol_send(main_instance, "run", [])

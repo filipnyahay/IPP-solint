@@ -4,7 +4,6 @@ and maintain the runtime
 
 Author: Filip Nyahay, xnyahaf00
 """
-from interpreter.input_model import Program
 from interpreter.input_model import Method
 
 
@@ -91,17 +90,50 @@ class SOLRuntime:
     def get_class(self, sol_class_name: str):
         return self.classes[sol_class_name]
 
+    def register_class(self, ast_node):
+        parent = self.get_class(ast_node.parent)
+        self.classes[ast_node.name] = SOLClass(ast_node.name, parent)
+        for method in ast_node.methods:
+            self.classes[ast_node.name].add_method(method.selector, ast_node=method)
+
+    def handle_block_value(self, block, selector, args):
+        expected_arity = len(block.ast_block.parameters)
+        actual_arity = selector.count(":")
+
+        if actual_arity != expected_arity or len(args) != expected_arity:
+            raise Exception("Block arity mismatch")
+
+        new_env = Environment(parent=block.env)
+
+        for i, param in enumerate(block.ast_block.parameters):
+            new_env.vars[param.name] = args[i]
+
+        return self.interpreter.execute_block(block.ast_block, new_env)
+
     def call_method(self, receiver, selector: str, args: list[SOLInstance]):
         method = receiver.method_lookup(selector)
 
-        if method is None:
-            raise Exception("does not understand")
+        if method is not None:
+            if method.is_builtin():
+                return method.builtin(self, receiver, args)
+            return self.interpreter.execute_user_method(method, receiver, args)
 
-        if method.is_builtin():
-            return method.builtin(self, receiver, args)
+        if isinstance(receiver, SOLBlock) and selector.startswith("value"):
+            return self.handle_block_value(receiver, selector, args)
 
-        # return self.interpreter.execute_user_method(method, receiver, args)
-        return None
+        if len(args) == 1:
+            attr_name = selector.rstrip(":")
+            receiver.instance_attrs[attr_name] = args[0]
+            return args[0]
+
+        if len(args) == 0:
+            attr_name = selector
+            if attr_name in receiver.instance_attrs:
+                return receiver.instance_attrs[attr_name]
+            raise Exception("51 attr not found")
+
+        # TODO:
+        raise Exception("Does not understand")
 
     def new_nil(self):
         return self._nil
@@ -126,10 +158,7 @@ class SOLRuntime:
 
     def new_block(self, ast_node, env):
         block_class = self.get_class("Block")
-        new_instance = self.call_method(block_class, "new", [])
-        new_instance.ast_node = ast_node
-        new_instance.env = env
-        return new_instance
+        return SOLBlock(block_class, ast_node, [], env)
 
 class Environment:
     """Local scope of a block or a method"""
@@ -137,6 +166,9 @@ class Environment:
         self.vars: dict[str, SOLInstance] = {}
         self.parent = parent
 
+#
+# builtin Object class helper
+#
 def sol_obj_new(runtime, cls, args):
     # print(f"Creating a SOLInstance of {cls}")
     return SOLInstance(cls)
@@ -179,6 +211,9 @@ def sol_obj():
     sol_obj.add_method("debug", builtin=sol_obj_debug)
     return sol_obj
 
+#
+# builtin Nil : Object class helper
+#
 def sol_nil_as_string(runtime, receiver: SOLInstance, args):
     return runtime.new_string("nil")
 
@@ -187,26 +222,29 @@ def sol_nil(sol_obj: SOLClass):
     sol_nil.add_method("asString", builtin=sol_nil_as_string)
     return sol_nil
 
-def sol_integer_greater_than(runtime, receiver: SOLInstance, operand: SOLInstance):
-    return receiver._builtin_val > operand._builtin_val
+#
+# builtin Integer : Object class helper
+#
+def sol_integer_greater_than(runtime, receiver: SOLInstance, args):
+    return receiver._builtin_val > args[0]._builtin_val
 
-def sol_integer_plus(runtime, receiver: SOLInstance, operand: SOLInstance):
-    receiver._builtin_val += operand._builtin_val
+def sol_integer_plus(runtime, receiver: SOLInstance, args):
+    receiver._builtin_val += args[0]._builtin_val
     return receiver
 
-def sol_integer_minus(runtime, receiver: SOLInstance, operand: SOLInstance):
-    receiver._builtin_val -= operand._builtin_val
+def sol_integer_minus(runtime, receiver: SOLInstance, args):
+    receiver._builtin_val -= args[0]._builtin_val
     return receiver
 
-def sol_integer_multiply_by(runtime, receiver: SOLInstance, operand: SOLInstance):
-    receiver._builtin_val *= operand._builtin_val
+def sol_integer_multiply_by(runtime, receiver: SOLInstance, args):
+    receiver._builtin_val *= args[0]._builtin_val
     return receiver
 
-def sol_integer_div_by(runtime, receiver: SOLInstance, operand: SOLInstance):
-    if operand._builtin_val == 0:
+def sol_integer_div_by(runtime, receiver: SOLInstance, args):
+    if args[0]._builtin_val == 0:
         # TODO: interpreter error
         raise Exception("51")
-    receiver._builtin_val = int(receiver._builtin_val / operand._builtin_val)
+    receiver._builtin_val = int(receiver._builtin_val / args[0]._builtin_val)
     return receiver
 
 def sol_integer_as_string(runtime, receiver: SOLInstance, args):
@@ -231,6 +269,9 @@ def sol_integer(sol_obj: SOLClass):
     sol_integer.add_method("timesRepeat", builtin=sol_integer_times_repeat)
     return sol_integer
 
+#
+# builtin String : Object class helper
+#
 def sol_string_read(runtime, receiver: SOLInstance, args):
     return runtime.new_string(input())
 
@@ -266,6 +307,9 @@ def sol_string(sol_obj: SOLClass):
     sol_string.add_method("length", builtin=sol_string_length)
     return sol_string
 
+#
+# builtin Boolean : Object class helper
+#
 def sol_bool_is_boolean(runtime, receiver: SOLInstance, args):
     return runtime.new_true()
 
@@ -316,5 +360,28 @@ def sol_false(sol_obj: SOLClass):
     sol_false.add_method("isBoolean", builtin=sol_bool_is_boolean)
     return sol_false
 
+#
+# builtin Block : Object class helper
+#
+def sol_block_value(runtime, receiver, args):
+    if receiver.ast_block is None:
+        if len(args) != 0:
+            raise Exception("Block arity mismatch")
+        return runtime.new_nil()
+
+    expected_arity = len(receiver.ast_block.parameters)
+
+    if len(args) != expected_arity:
+        raise Exception("Block arity mismatch")
+
+    env = Environment(parent=receiver.env)
+
+    for i, param in enumerate(receiver.ast_block.parameters):
+        env.vars[param.name] = args[i]
+
+    return runtime.interpreter.execute_block(receiver.ast_block, env)
+
 def sol_block(sol_obj: SOLClass):
-    return SOLClass("Block", sol_obj)
+    sol_block = SOLClass("Block", sol_obj)
+    sol_block.add_method("value", builtin=sol_block_value)
+    return sol_block
