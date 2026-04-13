@@ -4,8 +4,6 @@ and maintain the runtime
 
 Author: Filip Nyahay, xnyahaf00
 """
-from interpreter.error_codes import ErrorCode
-from interpreter.exceptions import InterpreterError
 from interpreter.input_model import Method
 
 
@@ -75,7 +73,6 @@ class SOLMethod:
         return f"{self.name} ({kind})"
 
     def is_builtin(self):
-        """Returns true of if method is builtin false otherwise"""
         return self.builtin is not None
 
 class SOLRuntime:
@@ -96,28 +93,20 @@ class SOLRuntime:
         self.classes["Block"] = sol_block(base_obj)
 
     def get_class(self, sol_class_name: str):
-        """Returns a SOLClass object with given class_name"""
         return self.classes[sol_class_name]
 
     def register_class(self, ast_node):
-        """
-        Adds class and its methods to runtime class registry
-            used on startup to register used classes
-        """
         parent = self.get_class(ast_node.parent)
         self.classes[ast_node.name] = SOLClass(ast_node.name, parent)
         for method in ast_node.methods:
             self.classes[ast_node.name].add_method(method.selector, ast_node=method)
 
     def handle_block_value(self, block, selector, args):
-        """Dispatcher method for (value:)* calls to a block"""
         expected_arity = len(block.ast_block.parameters)
         actual_arity = selector.count(":")
 
         if actual_arity != expected_arity or len(args) != expected_arity:
-            raise InterpreterError(error_code=ErrorCode.INT_OTHER, message=(
-                "Block arity doesn't match parameter count"
-            ))
+            raise Exception("Block arity mismatch")
 
         new_env = Environment(parent=block.env)
 
@@ -127,10 +116,6 @@ class SOLRuntime:
         return self.interpreter.execute_block(block.ast_block, new_env)
 
     def call_method(self, receiver, selector: str, args: list[SOLInstance]):
-        """
-        Message sending method for interpreter tries to first send a message
-        if that fails tries to lookup or add an instance attribute
-        """
         method = receiver.method_lookup(selector)
 
         if method is not None:
@@ -150,45 +135,33 @@ class SOLRuntime:
             attr_name = selector
             if attr_name in receiver.instance_attrs:
                 return receiver.instance_attrs[attr_name]
-            raise InterpreterError(error_codde=ErrorCode.INT_INST_ATTR, message=(
-                "Colliding method and attribute"
-            ))
+            raise Exception("51 attr not found")
 
-        raise InterpreterError(error_codde=ErrorCode.INT_DNU, message=(
-            "Does not understand"
-        ))
+        # TODO:
+        raise Exception("Does not understand")
 
     def new_nil(self):
-        """Helper method for creating an instance of Nil class, return refrence to singleton"""
         return self._nil
 
     def new_integer(self, value: int):
-        """Helper method for creating an instance of Integer class"""
         int_class = self.get_class("Integer")
         new_instance = self.call_method(int_class, "new", [])
         new_instance._builtin_val = value
         return new_instance
 
     def new_string(self, value: str):
-        """Helper method for creating an instance of String class"""
         str_class = self.get_class("String")
         new_instance = self.call_method(str_class, "new", [])
         new_instance._builtin_val = value
         return new_instance
 
     def new_true(self):
-        """Helper method for creating an instance of True class, return refrence to singleton"""
         return self._true
 
     def new_false(self):
-        """Helper method for creating an instance of False class, return refrence to singleton"""
         return self._false
 
     def new_block(self, ast_node, env):
-        """
-        Helper method for creating an instance of Block class, return refrence to singleton
-        Not sure if this should be possible
-        """
         block_class = self.get_class("Block")
         return SOLBlock(block_class, ast_node, [], env)
 
@@ -211,9 +184,7 @@ def sol_obj_from(runtime, cls, args):
 
     if hasattr(new_instance, "_builtin_val"):
         if not hasattr(obj, "_builtin_val"):
-            raise InterpreterError(error_code=ErrorCode.INT_OTHER, message=(
-                "Target object doesn't have expected instance attribute"
-            ))
+            raise Exception("53")
         new_instance._builtin_val = obj._builtin_val
 
     new_instance.instance_attrs = obj.instance_attrs.copy()
@@ -301,9 +272,8 @@ def sol_integer_multiply_by(runtime, receiver: SOLInstance, args):
 
 def sol_integer_div_by(runtime, receiver: SOLInstance, args):
     if args[0]._builtin_val == 0:
-        raise InterpreterError(error_code=ErrorCode.INT_INST_ARG, message=(
-            "Invalid argument: division by zero"
-        ))
+        # TODO: interpreter error
+        raise Exception("51")
     receiver._builtin_val = int(receiver._builtin_val / args[0]._builtin_val)
     return receiver
 

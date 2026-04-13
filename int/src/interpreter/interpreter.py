@@ -96,27 +96,38 @@ class Interpreter:
                         )
     # wrappers for runtime instance creation
     def sol_nil(self):
+        """Wrapper for creating an instance of Nil class, calls the runtime helper"""
         return self.runtime.new_nil()
 
     def sol_int(self, value: int):
+        """Wrapper for creating an instance of Integer class, calls the runtime helper"""
         return self.runtime.new_integer(value)
 
     def sol_str(self, value: str):
+        """Wrapper for creating an instance of String class, calls the runtime helper"""
         return self.runtime.new_string(value)
 
     def sol_true(self):
+        """Wrapper for creating an instance of True class, calls the runtime helper"""
         return self.runtime.new_true()
 
     def sol_false(self):
+        """Wrapper for creating an instance of False class, calls the runtime helper"""
         return self.runtime.new_false()
 
     def sol_block(self, ast_node, env):
+        """
+        Wrapper for creating an instance of Block class, calls the runtime helper
+        Additional info in sol_runtime.py
+        """
         return self.runtime.new_block(ast_node, env)
 
     def sol_send(self, receiver, selector: str, args):
+        """Wrapper for sending messages, calls the runtime helper"""
         return self.runtime.call_method(receiver, selector, args)
 
     def execute_literal(self, ast_node: Literal):
+        """Interprets AST Literal node"""
         if ast_node.class_id == "Integer":
             return self.sol_int(int(ast_node.value))
         if ast_node.class_id == "String":
@@ -133,6 +144,7 @@ class Interpreter:
         raise Exception("Unreachable")
 
     def execute_expr(self, ast_node: Expr, env):
+        """Interprets AST Expr node"""
         if ast_node.literal is not None:
             return self.execute_literal(ast_node.literal)
         if ast_node.var is not None:
@@ -144,15 +156,17 @@ class Interpreter:
             msg_selector = ast_node.send.selector
             msg_args = [self.execute_expr(arg.expr, env) for arg in ast_node.send.args]
             return self.sol_send(msg_receiver, msg_selector, msg_args)
+
         raise Exception("Unreachable")
 
     def execute_assign(self, ast_node: Assign, env):
-        # TODO: some checks
+        """Interprets AST Assign node"""
         expr_res = self.execute_expr(ast_node.expr, env)
         env.vars[ast_node.target.name] = expr_res
         return expr_res
 
     def execute_block(self, ast_node: Block, env):
+        """Interprets AST Block node"""
         result = self.sol_nil()
         for assign in ast_node.assigns:
             result = self.execute_assign(assign, env)
@@ -160,11 +174,17 @@ class Interpreter:
         return result
 
     def execute_user_method(self, method: SOLMethod, receiver: SOLInstance, args):
+        """
+        Interprets AST Method node
+        Prepears it's Environment, binding params, and adding self
+        """
         env = Environment()
         env.vars["self"] = receiver
 
         if method.ast_node.block.arity != len(args):
-            raise Exception("param arity vro")
+            raise InterpreterError(error_code=ErrorCode.INT_OTHER, message=(
+                "Block arity doesn't match number of passed parameters"
+            ))
 
         for i in range(len(args)):
             arg_name = method.ast_node.block.parameters[i].name
